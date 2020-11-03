@@ -117,8 +117,7 @@ export class ParsedTreeHandler {
         return htmlescape(repr).replace(/{(.*?)}/g, (g0, g1: string) => {
             var currItem = obj;
             var parts = g1.split(":");
-
-            var format: { sep:string, str?:string, hex?:string, dec?:string, uuid?:string, flags?:string } = { sep: ", " };
+            var format: { sep:string, str?:string, hex?:string, dec?:string, uuid?:string, flags?:string, additional?:string } = { sep: ", " };
             if (parts.length > 1)
                 parts[1].split(",").map(x => x.split("=")).forEach(kv => format[kv[0]] = kv.length > 1 ? kv[1] : true);
             parts[0].split(".").forEach(k => {
@@ -131,9 +130,10 @@ export class ParsedTreeHandler {
                     currItem = child;
                 }
             });
-
+            if(parts[2] != null) {
+                format.additional = parts[2]
+            }
             if (!currItem) return "";
-
             if (format.flags && currItem.type === ObjectType.Object) {
                 const values = Object.keys(currItem.object.fields).filter(x => currItem.object.fields[x].primitiveValue === true);
                 return values.length > 0 ? values.map(x => s`<span class="flags">${x}</span>`).join("|") : "🚫";
@@ -145,8 +145,22 @@ export class ParsedTreeHandler {
                 return s`${hexEncode(currItem.bytes)}`;
             else if (format.uuid && currItem.type === ObjectType.TypedArray && currItem.bytes.byteLength === 16)
                 return s`${uuidEncode(currItem.bytes, format.uuid === "ms")}`;
-            else if (format.dec && currItem.type === ObjectType.Primitive && Number.isInteger(currItem.primitiveValue))
+            else if (format.dec && currItem.type === ObjectType.Primitive && Number.isInteger(currItem.primitiveValue)) {
                 return s`${currItem.primitiveValue}`;
+            }  
+            else if (format.dec && 
+                currItem.type === ObjectType.Primitive && 
+                (Number(currItem.primitiveValue) == currItem.primitiveValue) &&
+                currItem.primitiveValue % 1 !== 0) {
+                    
+                if (format.additional && parseInt(format.additional)) {
+                    var decimalCount = parseInt(format.additional)
+                    decimalCount = decimalCount >= 0 ? decimalCount : 0
+                    return s`${currItem.primitiveValue.toFixed(decimalCount)}`;
+                } else {
+                    return s`${currItem.primitiveValue}`;
+                }
+            }  
             else if (currItem.type === ObjectType.Array) {
                 var escapedSep = s`${format.sep}`;
                 return currItem.arrayItems.map(item => this.reprObject(item)).join(escapedSep);
